@@ -6,7 +6,11 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
-#define DEBUG 0 
+//#include "stdlib.h"
+#define DEBUG 0
+#define STRIDE 1
+#define LOTTERY 0
+#define CONSTANT 10000 
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -25,6 +29,24 @@ pinit(void)
 {
   initlock(&ptable.lock, "ptable");
 }
+
+int rand2(void)//BR
+{
+   static int z1 = 12345, z2 = 12345, z3 = 12345, z4 = 12345;
+   int b;
+   b  = ((z1 << 6) ^ z1) >> 13;
+   z1 = ((z1 & 4294967294U) << 18) ^ b;
+   b  = ((z2 << 2) ^ z2) >> 27;
+   z2 = ((z2 & 4294967288U) << 2) ^ b;
+   b  = ((z3 << 13) ^ z3) >> 21;
+   z3 = ((z3 & 4294967280U) << 7) ^ b;
+   b  = ((z4 << 3) ^ z4) >> 12;
+   z4 = ((z4 & 4294967168U) << 13) ^ b;
+   return (z1 ^ z2 ^ z3 ^ z4);
+}
+
+
+
 
 // Must be called with interrupts disabled
 int
@@ -88,7 +110,12 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
-  p->numsyscall = 0;
+  p->numsyscall = 0;//BR
+  p->winticket = 0 ;//
+#if STRIDE
+  p->pass_stride = 0;//BR
+  p->stride = 0 ;//BR
+#endif 
   release(&ptable.lock);
 
   // Allocate kernel stack.
@@ -221,9 +248,11 @@ fork(void)
   return pid;
 }
 
+
+
 // Exit the current process.  Does not return.
-// An exited process remains in the zombie state
-// until its parent calls wait() to find out it exited.
+// An exitea process remains in the zombie state
+// until its parent calls wait() to find out it xited.
 void
 exit(void)
 {
@@ -263,6 +292,7 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+  curproc->numsyscall =0;
   sched();
   panic("zombie exit");
 }
@@ -319,69 +349,131 @@ wait(void)
 //  - swtch to start running that process
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
+#if STRIDE
+void
+scheduler(void)
+{
+  struct proc *p,*p2;//p2 for find out the min
+  struct cpu *c = mycpu();
+  c->proc = 0;
+ for(;;)
+ {
+   int min = CONSTANT +1 ;//to make sure the initial min > stride
+   acquire(&ptable.lock);
+   for(p2 = ptable.proc; p2 < &ptable.proc[NPROC]; p2++)//find out the minumin stride
+   {
+    if(p2->state == RUNNABLE && (min >( p2->stride))) 
+	min =p2->stride;     
+   }
+   #if DEBUG
+   if(min<CONSTANT)
+     cprintf("min is %d\n",min);   
+   #endif
+   release(&ptable.lock);
+   sti();
+   acquire(&ptable.lock);
+   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+   {
+    if(p->state != RUNNABLE) 
+       continue;
+    if(p->stride == min)
+    {
+       c->proc = p;
+       switchuvm(p);
+       p->state = RUNNING;
+       if(p->stride !=0)
+       {
+       		p->winticket ++;
+      		cprintf("stride is %d current  stride is %d && it runs %d times\n",p->pass_stride,p->stride,p->winticket);
+       		p->stride = p->stride + p->pass_stride;//accumulate
+       }
+       swtch(&(c->scheduler), p->context);
+       switchkvm();
+       c->proc = 0;
+       break;
+     }
+   }
+   release(&ptable.lock);
+ }
+}
+#endif 
+#if LOTTERY
 void
 scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-  //find out the total tichkers
- // cprintf("total lottery : %d\n",total_lottery);
   for(;;){
-     
-    
-   #if DEBUG
- 
-  int total_lottery= 0 ;//BR
-     total_lottery = 0 ;
-   struct proc *p2; 
+    int luckynum = 0 ; //BR
+    int total_lottery= 0 ;//BR
+    struct proc *p2; 
     acquire(&ptable.lock);
      for(p2 = ptable.proc; p2 < &ptable.proc[NPROC]; p2++)
      {
        if(p2->state == RUNNABLE || p2 ->state == RUNNING )
        { 
          
+   #if DEBUG
          if(p2->state ==RUNNING) cprintf("%d  running\n",p2->pid);
          if(p2->state ==RUNNABLE) cprintf("%d  runnable\n",p2->pid);
 
+   #endif
          total_lottery += p2->lottery;
        }
      }
      release(&ptable.lock); 
-   #endif
-     
+   if(total_lottery !=0)
+   {  
+     luckynum = rand2();
+     if(luckynum < 0) luckynum = luckynum * (-1);
+     luckynum = (luckynum % total_lottery) +1;//parentheses is necessary
+    // cprintf("lucky num = %d\n",luckynum);
+   }
     // Enable interrupts on this processor.
 //     sti();
     sti();
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
+    int cur_ticket = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
- //     cprintf("\n");
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
-   
+      cur_ticket += p->lottery;
+      if(cur_ticket < luckynum) continue;//keep searching
+      
+      if(total_lottery !=0)//lottery scheduling
+      {      
+       c->proc = p;
+       switchuvm(p);
+       p->state = RUNNING;
+       p->winticket++;
+       cprintf("ticket is %d && it runs %d times\n",p->lottery,p->winticket);
+       swtch(&(c->scheduler), p->context);
+       switchkvm();
 
-
-
-//
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
-
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
+       // Process is done running for now.
+       // It should have changed its p->state before coming back.
+       c->proc = 0;
+       break; //this is necessary
+      }
+      else // normal scheduling
+      {
+       c->proc = p;
+       switchuvm(p);
+       p->state = RUNNING;
+       swtch(&(c->scheduler), p->context);
+       switchkvm();
+        c->proc = 0;
+      }
     }
     release(&ptable.lock);
 
   }
 }
-
+#endif 
 // Enter scheduler.  Must hold only ptable.lock
 // and have changed proc->state. Saves and restores
 // intena because intena is a property of this
@@ -559,28 +651,13 @@ procdump(void)
     cprintf("\n");
   }
 }
-uint rand (void)
-{
-   static uint z1 = 12345, z2 = 12345, z3 = 12345, z4 = 12345;
-   uint b;
-   b  = ((z1 << 6) ^ z1) >> 13;
-   z1 = ((z1 & 4294967294U) << 18) ^ b;
-   b  = ((z2 << 2) ^ z2) >> 27;
-   z2 = ((z2 & 4294967288U) << 2) ^ b;
-   b  = ((z3 << 13) ^ z3) >> 21;
-   z3 = ((z3 & 4294967280U) << 7) ^ b;
-   b  = ((z4 << 3) ^ z4) >> 12;
-   z4 = ((z4 & 4294967168U) << 13) ^ b;
-   return (z1 ^ z2 ^ z3 ^ z4);
-}
-
 //BR
 //
 //
 void  
 hello(void)
 {
- cprintf("rand() = %d",rand());
+ cprintf("rand() = %d",rand2());
 /* struct proc *p = myproc();
  if(!growproc(PGSIZE))
     cprintf("%this process use %d\n",p->sz); 
@@ -632,6 +709,7 @@ void info(int choice)
   else if(choice ==3)//size of memory page
   {
        struct proc *p2 = myproc();
+      cprintf("the process size is %d\n",p2->sz);
        if(p2->sz *4 % PGSIZE !=0)
          cprintf("%this parent process use %d\n",p2->sz *4 /PGSIZE+1);
        else
@@ -647,6 +725,8 @@ void setlottery(int num)
 {
     struct proc *p = myproc();
     p-> lottery  = num; 
-
+    p-> stride = CONSTANT / num;
+    p-> pass_stride = CONSTANT / num;
+    cprintf("this prog strde is %d\n",p->stride);
 }
 //BR
