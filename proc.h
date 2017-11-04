@@ -52,6 +52,9 @@ struct proc {
   int priority;                //BR 
   int lottery;           //BR  lottery number
   int numsyscall;        //BR  number of system call for this process
+  int winticket;         //BR  the times of this process to be chosen
+  int pass_stride;
+  int stride; 
 };
 
 // Process memory is laid out contiguously, low addresses first:
