@@ -23,7 +23,7 @@ info(parameter): 1,2,3
 (3) The number of memory pages the current process is using.
     -> in proc.h there is a parameter to record process size (sz) , and divide it by the page size
 
-[note]
+***[note]***
 How to pass a parameter into a syscall?
 -> use argint(0, &parameter) to read the parameter passed by the user program.
 (called in the syscall.c)
@@ -66,7 +66,7 @@ means that the more tickets the process have, the less stride it has. And every 
 search into all RUNNABLE processes, and run the min cur_stride. The chosen process will add
 stride to the cur_stride.
 Stride is const but the accumulation stride is not.
-# [TEST]
+[TEST]
 prog 10&; prog 5&; prog 25&
 prog 100 tickets -> stride 100
 prog 50 tickets -> stride 200
