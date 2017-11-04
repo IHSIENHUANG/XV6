@@ -1,4 +1,4 @@
-There is a report.pdf, including all details about how to add a system call && how the stride and Lottery scheduling work. 
+### There is a report.pdf, including all details about how to add a system call && how the stride and Lottery scheduling work. 
 
 [BACKGROUND]
 AOS XV6
@@ -36,7 +36,7 @@ How to add a system call?
 6. Def.h: add a forward declaration for your new system call
 7. User.h: define the function that can be called through the shell
 
-# [note]
+## [note]
 How to decide the CPU number to 1? ( recorded in the Makefile)
 -> make CPUS=1 qemu-nox
 Normally, scheduling in xv6 is to search into the ptable and find out the state is RUNNABLE
@@ -46,7 +46,7 @@ Therefore, the sequence will be A.B,C,A,B,C,A,B,C,A,B,C,A,B,C…………..
 //to decide what kind of scheduling the user want
 #define STRIDE 0
 #define LOTTERY 1
-LOTTERY SCHEDULING:
+## LOTTERY SCHEDULING:
 In the Lottery Scheduling. Every process has a given tickets, and every time scheduling the
 system will generate a random number between 0 ~ toal_tickets ( sum the tickets of
 RUNNABLE processes).
@@ -54,7 +54,7 @@ For example:
 A: tickets = 10, B: 20, C:30; and assume the sequence in the ptable is A,B,C.
 Hence, when the system generate the number 0~10: A will be chosen, 11~30, B: will be
 chosen...
-[TEST] prog 1&;prog 3
+## [TEST] prog 1&;prog 3
 1 means tickets is 10;
 3 means tickets is 30;
 Consequently, we can make sure that the scheduling is correct, for the reason that the ratio of
@@ -66,7 +66,7 @@ means that the more tickets the process have, the less stride it has. And every 
 search into all RUNNABLE processes, and run the min cur_stride. The chosen process will add
 stride to the cur_stride.
 Stride is const but the accumulation stride is not.
-[TEST]
+## [TEST]
 prog 10&; prog 5&; prog 25&
 prog 100 tickets -> stride 100
 prog 50 tickets -> stride 200
