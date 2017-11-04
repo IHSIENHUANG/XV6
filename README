@@ -36,7 +36,7 @@ How to add a system call?
 6. Def.h: add a forward declaration for your new system call
 7. User.h: define the function that can be called through the shell
 
-[note]
+# [note]
 How to decide the CPU number to 1? ( recorded in the Makefile)
 -> make CPUS=1 qemu-nox
 Normally, scheduling in xv6 is to search into the ptable and find out the state is RUNNABLE
@@ -66,7 +66,7 @@ means that the more tickets the process have, the less stride it has. And every 
 search into all RUNNABLE processes, and run the min cur_stride. The chosen process will add
 stride to the cur_stride.
 Stride is const but the accumulation stride is not.
-[TEST]
+# [TEST]
 prog 10&; prog 5&; prog 25&
 prog 100 tickets -> stride 100
 prog 50 tickets -> stride 200
