@@ -1,3 +1,5 @@
+There is a report.pdf, including all details about how to add a system call && how the stride and Lottery scheduling work. 
+
 [BACKGROUND]
 AOS XV6
 ● sysproc.c add the real implementation of your method here
